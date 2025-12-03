@@ -1,0 +1,7 @@
+default_model: "claude-3-5-haiku-20241022"
+
+mcp:
+  servers:
+    postgres:
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-postgres", "postgresql://#####:########:5432/######"]
