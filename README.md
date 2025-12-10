@@ -2,125 +2,95 @@
 
 Este repositorio contiene dos scripts diseñados para realizar mantenimiento automático en servidores Ubuntu que corren en instancias EC2 de AWS. Estos scripts ayudan a liberar espacio en disco y garantizar que el servidor se mantenga estable con el paso del tiempo.
 
-Nota:
-Este repositorio no incluye el contenido interno de los scripts, solo su propósito y las instrucciones para configurarlos en una instancia EC2.
 
 📌 Scripts incluidos
-1. cache_cleaning.sh
+cache_cleaning.sh
 
-Realiza tareas de mantenimiento general en el servidor, como:
+Realiza tareas de mantenimiento general, como:
 
-Limpieza de cachés del sistema (ej. apt).
+Limpieza de cachés del sistema (apt).
 
 Eliminación de archivos temporales.
 
-Reducción del tamaño de logs pesados.
+Reducción del tamaño de logs grandes.
 
 Remoción de paquetes obsoletos.
 
-Este script está pensado para ejecutarse manualmente o de forma mensual, ya que algunas de sus operaciones son agresivas si se ejecutan muy seguido.
+Este script está pensado para uso manual o ejecución mensual. Algunas tareas pueden afectar rendimiento si se ejecutan demasiado seguido.
 
-2. snap_cleanup.sh
+snap_cleanup.sh
 
-Este script elimina únicamente las versiones deshabilitadas de snaps, las cuales son versiones antiguas que Ubuntu conserva innecesariamente.
+Realiza una limpieza segura del sistema Snap:
 
-Esto es especialmente útil porque en servidores pequeños el directorio /snap puede crecer rápidamente y consumir varios gigabytes.
+Elimina revisiones deshabilitadas.
 
-Este script se puede automatizar de forma segura para que se ejecute una vez al mes.
-⚠️ snapd debe estar instalado
+Limpia la caché de Snapd (/var/lib/snapd/cache).
 
-En la mayoría de AMIs oficiales de Ubuntu ya viene.
+Identifica archivos .snap huérfanos (no montados).
 
-Para asegurarte:
+Elimina únicamente los .snap huérfanos.
+
+Esto es muy útil porque /snap y /var/lib/snapd suelen ocupar varios GB en servidores pequeños.
+
+⚠️ Requisito
+
+snapd debe estar instalado. Para verificar:
 
 snap --version
 
-🖥️ Cómo configurarlos en una instancia EC2
+🖥️ Configuración en una instancia EC2
 
-Sigue estos pasos desde tu sesión SSH en el servidor EC2.
+Sigue estos pasos desde tu sesión SSH en el servidor.
 
-1. Conectarse al servidor EC2
+1. Conectarte al servidor EC2
 ssh -i /ruta/tu-llave.pem ubuntu@<PUBLIC_IP>
 
 2. Crear el directorio donde vivirán los scripts
-sudo mkdir -p /usr/local/bin/maintenance
-sudo chown ubuntu:ubuntu /usr/local/bin/maintenance
+sudo mkdir -p /home/ubuntu/maintenance
+sudo chown ubuntu:ubuntu /home/ubuntu/maintenance
 
+3. Clonar el repositorio de GitHub
+git clone https://github.com/Jescob47/Cache_Snap_Cleaning.git
 
-Se recomienda usar /usr/local/bin/maintenance ya que es un estándar para scripts personalizados del sistema.
+4. Dar permisos de ejecución
+sudo chmod 750 /home/ubuntu/maintenance/cache_cleaning.sh
+sudo chmod 750 /home/ubuntu/maintenance/snap_cleanup.sh
 
-3. Subir los scripts al repositorio de GitHub
-
-Estos scripts deben vivir en tu repo GitHub dentro de scripts/.
-
-Cuando los clones directamente en tu EC2, se copiarán automáticamente.
-
-Ejemplo (cambia la URL por tu repo):
-
-git clone https://github.com/tuusuario/tu-repo.git
-
-4. Mover los scripts del repositorio al directorio del sistema
-
-Asumiendo que el repo contiene:
-
-scripts/cache_cleaning.sh
-scripts/snap_cleanup.sh
-
-
-Entonces:
-
-cd tu-repo/scripts
-
-sudo mv cache_cleaning.sh /usr/local/bin/maintenance/cache_cleaning.sh
-sudo mv snap_cleanup.sh  /usr/local/bin/maintenance/snap_cleanup.sh
-
-5. Dar permisos de ejecución
-sudo chmod 750 /usr/local/bin/maintenance/cache_cleaning.sh
-sudo chmod 750 /usr/local/bin/maintenance/snap_cleanup.sh
-
-
-Opcional pero recomendado:
-
-sudo chown root:root /usr/local/bin/maintenance/*.sh
-
-6. Probar los scripts manualmente
-
-Ejecuta cada uno para confirmar que funcionan sin errores:
-
-sudo /usr/local/bin/maintenance/snap_cleanup.sh
-sudo /usr/local/bin/maintenance/cache_cleaning.sh
+5. Probar los scripts manualmente
+sudo /home/ubuntu/maintenance/snap_cleanup.sh
+sudo /home/ubuntu/maintenance/cache_cleaning.sh
 
 ⏱️ Programar ejecución automática (cron)
 
-Para que los scripts se ejecuten automáticamente cada mes:
+Editar crontab:
 
 sudo crontab -e
 
 
-Agregar al final:
+Agregar:
 
-# Limpieza de snaps — día 1 del mes a las 3:00 AM
-0 3 1 * * /usr/local/bin/maintenance/snap_cleanup.sh >> /var/log/snap_cleanup.log 2>&1
+# Limpieza de snaps — día 1 de cada mes a las 3:00 AM
+0 3 1 * * /home/ubuntu/maintenance/snap_cleanup.sh >> /home/ubuntu/maintenance/snap_cleanup.log 2>&1
 
-# Limpieza general — día 1 del mes a las 4:00 AM
-0 4 1 * * /usr/local/bin/maintenance/cache_cleaning.sh >> /var/log/cache_cleaning.log 2>&1
+# Limpieza general — día 1 de cada mes a las 4:00 AM
+0 4 1 * * /home/ubuntu/maintenance/cache_cleaning.sh >>/home/ubuntu/maintenance/cache_cleaning.log 2>&1
 
 
 Esto:
 
 Automatiza ambas limpiezas.
 
-Divide las tareas para evitar saturar el servidor.
+Distribuye carga.
 
-Guarda logs persistentes en /var/log/.
+Guarda logs persistentes.
 
 📊 Verificar espacio liberado
 
-Después de que corran los scripts o cuando quieras:
+Ver uso general:
 
 df -h
 
 
-Usa esto para ver qué directorios ocupan más:
+Ver qué directorios ocupan más:
 
 sudo du -h --max-depth=1 / 2>/dev/null
