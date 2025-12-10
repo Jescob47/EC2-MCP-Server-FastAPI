@@ -27,6 +27,13 @@ Este script elimina únicamente las versiones deshabilitadas de snaps, las cuale
 Esto es especialmente útil porque en servidores pequeños el directorio /snap puede crecer rápidamente y consumir varios gigabytes.
 
 Este script se puede automatizar de forma segura para que se ejecute una vez al mes.
+⚠️ snapd debe estar instalado
+
+En la mayoría de AMIs oficiales de Ubuntu ya viene.
+
+Para asegurarte:
+
+snap --version
 
 🖥️ Cómo configurarlos en una instancia EC2
 
