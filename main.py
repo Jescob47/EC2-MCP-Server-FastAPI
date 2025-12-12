@@ -341,10 +341,11 @@ async def run_agent(user_email: str, user_message: str) -> str:
             # 2. Construir mensajes para el agente
             messages = []
             for msg in history:
+                content = msg["content"][:1500]  # Truncar mensajes largos
                 if msg["role"] == "user":
-                    messages.append(Prompt.user(msg["content"]))
+                    messages.append(Prompt.user(content))
                 else:
-                    messages.append(Prompt.assistant(msg["content"]))
+                    messages.append(Prompt.assistant(content))
             
             # 3. Agregar mensaje actual
             messages.append(Prompt.user(user_message))
