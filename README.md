@@ -1,96 +1,90 @@
-🧹 EC2 Maintenance Scripts — README
+Este proyecto implementa un servidor Webhook para Google Chat utilizando FastAPI y Fast-Agent. Su función principal es actuar como un asistente de IA que consulta una base de datos PostgreSQL mediante el protocolo MCP (Model Context Protocol) para responder dudas de usuarios corporativos.
 
-Este repositorio contiene dos scripts diseñados para realizar mantenimiento automático en servidores Ubuntu que corren en instancias EC2 de AWS. Estos scripts ayudan a liberar espacio en disco y garantizar que el servidor se mantenga estable con el paso del tiempo.
+🚀 Características Principales
+Arquitectura Resiliente a Timeouts: Maneja automáticamente el límite de tiempo de respuesta de Google Chat. Si el agente tarda más de 20 segundos, el servidor responde inmediatamente con un mensaje de "espera" y continúa el procesamiento en segundo plano, enviando la respuesta final a través de la API asíncrona.
 
+Seguridad Enterprise:
 
-📌 Scripts incluidos
-cache_cleaning.sh
+Verificación de firma de tokens de Google (evita peticiones falsas).
 
-Realiza tareas de mantenimiento general, como:
+Gestión de credenciales mediante AWS Secrets Manager.
 
-Limpieza de cachés del sistema (apt).
+Restricción de acceso por dominio de correo (ALLOWED_DOMAIN).
 
-Eliminación de archivos temporales.
+Historial de Chat: Mantiene un contexto limitado de la conversación (últimos 4 mensajes) almacenado en archivos JSON locales.
 
-Reducción del tamaño de logs grandes.
+Integration con MCP: Utiliza fast-agent-mcp para conectar con PostgreSQL de forma segura sin exponer queries SQL al usuario final.
 
-Remoción de paquetes obsoletos.
+📋 Requisitos Previos
+Python 3.10+
 
-Este script está pensado para uso manual o ejecución mensual. Algunas tareas pueden afectar rendimiento si se ejecutan demasiado seguido.
+Cuenta de AWS (para Secrets Manager y Boto3).
 
-snap_cleanup.sh
+Proyecto en Google Cloud Platform (API de Google Chat habilitada).
 
-Realiza una limpieza segura del sistema Snap:
+Servidor PostgreSQL accesible.
 
-Elimina revisiones deshabilitadas.
+🛠️ Instalación
+Clonar el repositorio:
+git clone https://github.com/Jescob47/EC2-MCP-Server-FastAPI.git
+cd tu-repo
 
-Limpia la caché de Snapd (/var/lib/snapd/cache).
+Crear entorno virtual:
+python3 -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+Instalar dependencias: 
+pip install -r requirements.txt
 
-Identifica archivos .snap huérfanos (no montados).
+⚙️ Configuración
+1. Archivos de Configuración de Fast-Agent
+El sistema requiere dos archivos YAML en la raíz para la configuración del agente MCP:
 
-Elimina únicamente los .snap huérfanos.
+fastagent.config.yaml
+fastagent.secrets.yaml
 
-Esto es muy útil porque /snap y /var/lib/snapd suelen ocupar varios GB en servidores pequeños.
+2. Variables de Entorno y Constantes
+Edita el archivo main.py para ajustar las siguientes constantes a tu entorno:
 
-⚠️ Requisito
+Python
+# En main.py
 
-snapd debe estar instalado. Para verificar:
+SECRET_NAME = "SECRET_NAME_AWS"  # Nombre de tu secreto en AWS Secrets Manager
+ALLOWED_DOMAIN = "tu-empresa.com" # Dominio de correo permitido
+PROJECT_URL = "https://..."       # Audience URL de tu proyecto Google Cloud
 
-snap --version
+3. AWS Secrets Manager
+El código espera encontrar un secreto en AWS con el nombre definido en SECRET_NAME. Este secreto debe contener el JSON de la Cuenta de Servicio de Google (Service Account Key) necesaria para usar la API de Chat.
 
-🖥️ Configuración en una instancia EC2
+4. Permisos IAM (Si despliegas en EC2)
+Asegúrate de que el Rol IAM adjunto a tu instancia EC2 tenga permisos para leer el secreto:
 
-Sigue estos pasos desde tu sesión SSH en el servidor.
+{
+    "Effect": "Allow",
+    "Action": "secretsmanager:GetSecretValue",
+    "Resource": "arn:aws:secretsmanager:region:account:secret:SECRET_NAME-??????"
+}
 
-1. Conectarte al servidor EC2
-ssh -i /ruta/tu-llave.pem ubuntu@<PUBLIC_IP>
+🚀 Ejecución
+Para desarrollo local o producción con el entorno virtual encendido:
+uvicorn main:app --host 0.0.0.0 --port 8000
 
-2. Crear el directorio donde vivirán los scripts
-sudo mkdir -p /home/ubuntu/maintenance
-sudo chown ubuntu:ubuntu /home/ubuntu/maintenance
+🧠 Arquitectura de Flujo
+El sistema utiliza un enfoque híbrido (Sincrónico/Asincrónico) para garantizar una buena experiencia de usuario:
 
-3. Clonar el repositorio de GitHub
-git clone https://github.com/Jescob47/Cache_Snap_Cleaning.git
+Recepción: Llega el Webhook desde Google Chat.
 
-4. Dar permisos de ejecución
-sudo chmod 750 /home/ubuntu/maintenance/cache_cleaning.sh
-sudo chmod 750 /home/ubuntu/maintenance/snap_cleanup.sh
+Validación: Se verifica el Token y el Dominio del email.
 
-5. Probar los scripts manualmente
-sudo /home/ubuntu/maintenance/snap_cleanup.sh
-sudo /home/ubuntu/maintenance/cache_cleaning.sh
+Intento Rápido (Shielded Task):
 
-⏱️ Programar ejecución automática (cron)
+Se lanza el agente de IA.
 
-Editar crontab:
+Si responde en < 20 segundos, se devuelve la respuesta directamente al Webhook.
 
-sudo crontab -e
+Fallback (Timeout):
 
+Si pasan 20 segundos, el servidor responde al Webhook con "I'm processing your request...".
 
-Agregar:
+La tarea del agente continúa en segundo plano (background task).
 
-# Limpieza de snaps — día 1 de cada mes a las 3:00 AM
-0 3 1 * * /home/ubuntu/maintenance/snap_cleanup.sh >> /home/ubuntu/maintenance/snap_cleanup.log 2>&1
-
-# Limpieza general — día 1 de cada mes a las 4:00 AM
-0 4 1 * * /home/ubuntu/maintenance/cache_cleaning.sh >>/home/ubuntu/maintenance/cache_cleaning.log 2>&1
-
-
-Esto:
-
-Automatiza ambas limpiezas.
-
-Distribuye carga.
-
-Guarda logs persistentes.
-
-📊 Verificar espacio liberado
-
-Ver uso general:
-
-df -h
-
-
-Ver qué directorios ocupan más:
-
-sudo du -h --max-depth=1 / 2>/dev/null
+Una vez el agente termina, el sistema usa la Google Chat API para enviar la respuesta final de forma proactiva.
